@@ -101,6 +101,7 @@ def main():
         frame_number += 1
     
     # Release resources
+
     input_video.release()
     output_video.release()
     cv2.destroyAllWindows()
