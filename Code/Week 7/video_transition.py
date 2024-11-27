@@ -98,6 +98,7 @@ def main():
         print(f"Error: Could not open video file {video_path}")
         return
 
+
     # Get video properties
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
