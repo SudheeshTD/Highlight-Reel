@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
+from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, GridSearchCV
 
 # Load provided_data.csv
 data = pd.read_csv('provided_data.csv', header=None, names=['frame', 'xc', 'yc', 'w', 'h', 'effort'])
@@ -16,6 +17,17 @@ data['effort'] = data['effort'].interpolate(method='linear')
 # Ensure 'frame' is integer type for merging
 data['frame'] = data['frame'].astype(int)
 
+# Add new features
+data['aspect_ratio'] = data['w'] / data['h']  # Ratio of width to height
+data['diagonal'] = np.sqrt(data['w']**2 + data['h']**2)  # Diagonal length of bounding box
+
+# Calculate velocity and acceleration
+data[['vx', 'vy']] = data[['xc', 'yc']].diff().fillna(0)  # Velocity (change in position)
+data[['ax', 'ay']] = data[['vx', 'vy']].diff().fillna(0)  # Acceleration (change in velocity)
+
+# Normalize effort relative to frame-wise mean and standard deviation
+data['effort_norm'] = (data['effort'] - data['effort'].mean()) / data['effort'].std()
+
 # Load target.csv
 target = pd.read_csv('target.csv')  # Assumes columns 'frame' and 'value'
 
@@ -26,52 +38,38 @@ target['frame'] = target['frame'].astype(int)
 merged = pd.merge(data, target, on='frame', how='inner')
 
 # Features and target
-features = ['xc', 'yc', 'w', 'h', 'effort']
+features = ['xc', 'yc', 'w', 'h', 'effort_norm', 'aspect_ratio',
+            'diagonal', 'vx', 'vy', 'ax', 'ay']
 X = merged[features]
 y = merged['value']
 
-# Normalize the features
+# Normalize the features (important for SVM)
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
-# Function to create lag features for time series data
-def create_lag_features(X, window_size):
-    X_lagged = pd.DataFrame()
-    for i in range(window_size):
-        X_shifted = pd.DataFrame(X).shift(i)
-        X_shifted.columns = [f"{col}_lag_{i}" for col in X_shifted.columns]
-        X_lagged = pd.concat([X_lagged, X_shifted], axis=1)
-    return X_lagged.dropna()
-
-window_size = 2  # Define the window size for time series chunks
-X_lagged = create_lag_features(X_scaled, window_size)
-y_lagged = y.iloc[window_size - 1:]  # Adjust y to align with lagged features
-frames_lagged = merged['frame'].iloc[window_size - 1:]  # Get corresponding frame numbers
-
-# Align indices
-y_lagged = y_lagged.iloc[:len(X_lagged)].reset_index(drop=True)
-frames_lagged = frames_lagged.iloc[:len(X_lagged)].reset_index(drop=True)
-X_lagged = X_lagged.reset_index(drop=True)
-
 # Split into train and test sets (chronological split to respect time series nature)
-split_index = int(len(X_lagged) * 0.7)
-X_train = X_lagged.iloc[:split_index]
-X_test = X_lagged.iloc[split_index:]
-y_train = y_lagged.iloc[:split_index]
-y_test = y_lagged.iloc[split_index:]
-frames_test = frames_lagged.iloc[split_index:]  # Frames corresponding to test set
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
 
-# Train a Random Forest classifier
-clf = RandomForestClassifier(n_estimators=100, random_state=42)
-clf.fit(X_train, y_train)
+# Set up SVM with optimized hyperparameter tuning using GridSearchCV
+param_grid = {
+    'C': [0.1, 1, 10],         # Regularization strength
+    'kernel': ['linear'],      # Use linear kernel for efficiency on large datasets
+}
 
-# Predict on the test set
-y_pred = clf.predict(X_test)
+grid_search = GridSearchCV(SVC(), param_grid, cv=3, scoring='accuracy', n_jobs=-1)  # Parallelize with n_jobs=-1
+grid_search.fit(X_train, y_train)
+
+# Best model from GridSearchCV
+best_svm_model = grid_search.best_estimator_
+
+# Predict on the test set using the best SVM model
+y_pred = best_svm_model.predict(X_test)
 
 # Compute and print classification report
+print("Best Parameters:", grid_search.best_params_)
 print(classification_report(y_test, y_pred))
 
-# Write predictions to CSV with the same syntax as target.csv
-predictions_df = pd.DataFrame({'frame': frames_test, 'value': y_pred})
+# Save predictions to CSV in the same format as target.csv
+predictions_df = pd.DataFrame({'frame': merged.iloc[len(X_train):]['frame'],
+                               'value': y_pred})
 predictions_df.to_csv('predictions.csv', index=False)
-
