@@ -64,6 +64,9 @@ def main():
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     output_video = cv2.VideoWriter('output_video.mp4', fourcc, fps, (width, height))
 
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 'mp4v' is a common codec for .mp4 files
+    out = cv2.VideoWriter('output_video.mp4', fourcc, fps, (width, height))
+
     # Read CSV file if provided
     frame_filter = {}
     if args.csv:
@@ -111,3 +114,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
