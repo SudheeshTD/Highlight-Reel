@@ -11,7 +11,7 @@ def process_frame(frame, apply_filters=True, crop=None):
         frame = frame[y0:y0 + crop_h, x0:x0 + crop_w]
 
     if apply_filters:
-        # Convert to grayscale
+        # Convert to graydeacscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # Apply Gaussian blur
@@ -42,6 +42,11 @@ def main():
 
     # Open the input video
     input_video = cv2.VideoCapture(args.input_video)
+
+
+    frame_count = int(input_video.get(cv2.CAP_PROP_FRAME_COUNT))
+    print(f"Total frames in video: {frame_count}")
+
 
     if not input_video.isOpened():
         print("Error opening video file")
