@@ -8,10 +8,7 @@ def process_frame(frame, apply_filters=True, crop=None):
     if crop:
         h, w = frame.shape[:2]
         x0, y0, crop_w, crop_h = [int(c * 0.01 * dim) for c, dim in zip(crop, [w, h, w, h])]
-        if 0 <= x0 < w and 0 <= y0 < h and (x0 + crop_w) <= w and (y0 + crop_h) <= h:
-            frame = frame[y0:y0 + crop_h, x0:x0 + crop_w]
-        else:
-            print("Invalid crop dimensions:", x0, y0, crop_w, crop_h)
+        frame = frame[y0:y0 + crop_h, x0:x0 + crop_w]
 
     if apply_filters:
         # Convert to grayscale
@@ -43,17 +40,13 @@ def main():
                         help='Crop video as percentage: x0 y0 width height')
     args = parser.parse_args()
 
-    print("Input video:", args.input_video)
-    print("CSV file:", args.csv)
-    print("Filters applied:", args.filters)
-    print("Crop arguments:", args.crop)
 
 
     # Open the input video
     input_video = cv2.VideoCapture(args.input_video)
 
     if not input_video.isOpened():
-        print("Error opening video file:", args.input_video)
+        print("Error opening video file")
         return
 
     # Get video properties
@@ -69,12 +62,9 @@ def main():
     else:
         width, height = original_width, original_height
 
-    fourcc = cv2.VideoWriter_fourcc(*'.mp4')  # Change to 'XVID' or 'X264'
+    # Create output video writer
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     output_video = cv2.VideoWriter('output_video.mp4', fourcc, fps, (width, height))
-
-    if not output_video.isOpened():
-        print("Error initializing video writer")
-        return
 
     # Read CSV file if provided
     frame_filter = {}
@@ -83,19 +73,20 @@ def main():
             csv_reader = csv.DictReader(csvfile)
             for row in csv_reader:
                 frame_filter[int(row['frame'])] = int(row['value'])
-        print("Frame filter content:", frame_filter)  # Debug print
 
+        # Find the first non-zero value frame
         frame_number = next((frame for frame, value in frame_filter.items() if value != 0), 0)
+
+        # Set the video capture to the first non-zero value frame
         input_video.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
     else:
         frame_number = 0
 
     while True:
         ret, frame = input_video.read()
+
         if not ret:
-            print(f"Finished processing or failed to read frame {frame_number}")
             break
-        print(f"Processing frame {frame_number}")
 
         # Check if we should process this frame
         if not frame_filter or frame_filter.get(frame_number, 0) == 1:
